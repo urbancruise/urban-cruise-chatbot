@@ -41,6 +41,8 @@ Phase 1 provides a MySQL-backed support widget, approved-FAQ lookup, and travel 
    npm run dev
    ```
 
+   The development server is available at `http://localhost:5001`.
+
 The migration runner applies numbered files under `db/migrations` in order and stores each file name and SHA-256 checksum in `schema_migrations`. Do not edit an already-applied migration; add a new numbered migration instead. The seed command is safe to rerun.
 
 ## Configuration and approval
