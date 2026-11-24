@@ -21,11 +21,11 @@ export const welcomeMenu = [
 export function supportStatusCopy(mode: ServiceMode, languageCode: string): string {
   if (languageCode === "hi") {
     return mode === "day"
-      ? "लाइव सहायता उपलब्ध नहीं है। यह चरण केवल सहायता कतार का प्लेसहोल्डर दिखाता है। आप कॉलबैक के लिए पूछताछ भेज सकते हैं।"
+      ? "दिन के समय हमारी एजेंट टीम चैट में सहायता करती है।"
       : "अभी स्वचालित सहायता उपलब्ध है। आप पूछताछ भेज सकते हैं और हमारी टीम बाद में संपर्क करेगी।";
   }
   return mode === "day"
-    ? "Live support is not connected yet. This Phase 1 placeholder does not show agent presence or an estimated wait. You can submit an enquiry for a callback."
+    ? "Our daytime agent team can help you in this chat."
     : "Automated support is available now. Send an enquiry and our team can follow up.";
 }
 

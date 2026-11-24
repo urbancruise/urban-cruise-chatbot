@@ -22,7 +22,7 @@ export default function Home() {
             <p className="mt-6 max-w-xl text-lg leading-8 text-slate-300">
               Find a car, tempo traveller, or bus for your plans in and beyond Delhi. Share your route and our team can follow up with an enquiry.
             </p>
-            <p className="mt-8 text-sm text-slate-300">Day support queue placeholder · Night automated FAQs</p>
+            <p className="mt-8 text-sm text-slate-300">Agent chat 09:00–21:00 IST · FAQ support 21:00–09:00 IST</p>
           </div>
           <div className="grid grid-cols-2 gap-3" aria-label="Rental options">
             {[
@@ -43,7 +43,7 @@ export default function Home() {
         <p className="text-sm font-semibold uppercase tracking-wide text-emerald-800">Plan your trip</p>
         <h2 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tight">Tell us where you’re headed.</h2>
         <p className="mt-4 max-w-2xl leading-7 text-slate-700">
-          Use the support chat to browse approved answers, check topics, or send a travel enquiry. An enquiry is not a confirmed booking.
+          Chat with an agent from 09:00 to 21:00 IST. From 21:00 to 09:00 IST, the chatbot answers using approved FAQs. An enquiry is not a confirmed booking.
         </p>
       </section>
     </main>

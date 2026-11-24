@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:migrate": "node --env-file=.env.local scripts/migrate.mjs",
-    "db:seed": "node --env-file=.env.local scripts/seed.mjs"
+    "db:seed": "node --env-file=.env.local scripts/seed.mjs",
+    "db:prune-chat-history": "node --env-file=.env.local scripts/prune-chat-history.mjs",
+    "db:agent:create": "node --env-file=.env.local --import tsx scripts/create-agent.ts"
   },
   "dependencies": {
     "mysql2": "^3.24.6",

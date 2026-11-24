@@ -4,7 +4,7 @@ import QuickReplies, { type QuickReply } from "./QuickReplies";
 
 export interface ChatMessage {
   id: string;
-  author: "assistant" | "user";
+  author: "assistant" | "agent" | "user";
   text: string;
   replies?: QuickReply[];
 }
@@ -12,9 +12,13 @@ export interface ChatMessage {
 export default function MessageList({
   messages,
   onReply,
+  isTyping,
+  typingLabel,
 }: {
   messages: ChatMessage[];
   onReply: (reply: QuickReply) => void;
+  isTyping: boolean;
+  typingLabel: string;
 }) {
   return (
     <ol
@@ -35,6 +39,11 @@ export default function MessageList({
                 : "rounded-bl-sm bg-stone-100 text-slate-900"
             }`}
           >
+            {message.author === "agent" && (
+              <span className="mb-1 block text-xs font-semibold text-emerald-900">
+                Urban Cruise agent
+              </span>
+            )}
             <p className="whitespace-pre-wrap break-words">{message.text}</p>
             {message.author === "assistant" && message.replies && (
               <QuickReplies replies={message.replies} onSelect={onReply} />
@@ -42,6 +51,13 @@ export default function MessageList({
           </div>
         </li>
       ))}
+      {isTyping && (
+        <li className="flex justify-start" role="status" aria-label={typingLabel}>
+          <div className="rounded-2xl rounded-bl-sm bg-stone-100 px-4 py-3 text-sm text-slate-700">
+            <span className="animate-pulse">{typingLabel}</span>
+          </div>
+        </li>
+      )}
     </ol>
   );
 }
