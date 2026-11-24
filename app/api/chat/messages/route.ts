@@ -3,15 +3,32 @@ import { enforceRateLimit } from "@/lib/api/rate-limit";
 import { requireSession } from "@/lib/api/session-auth";
 import { supportStatusCopy } from "@/lib/chat/content";
 import { fallbackCopy, matchFaq } from "@/lib/chat/faq-engine";
-import { messageSchema } from "@/lib/chat/schemas";
+import { chatHistorySchema, messageSchema } from "@/lib/chat/schemas";
 import { sanitizePlainText } from "@/lib/chat/sanitize";
 import { getCurrentServiceMode } from "@/lib/chat/business-hours";
 import { createAuditLog } from "@/lib/repositories/chatbotAuditLogs";
-import { createMessage } from "@/lib/repositories/chatbotMessages";
+import { createMessage, deleteExpiredMessages, listRecentMessages } from "@/lib/repositories/chatbotMessages";
 import { listPublishedCategories, findPublishedCategoryById } from "@/lib/repositories/faqCategories";
 import { listPublishedFaqs, listPublishedFaqsByCategory, findPublishedFaqById } from "@/lib/repositories/chatbotFaqs";
 import { listPublishedFaqKeywords } from "@/lib/repositories/faqKeywords";
 import { listRelatedPublishedFaqs } from "@/lib/repositories/faqRelated";
+import { queueConversationForAgent } from "@/lib/repositories/chatbotAgents";
+import { publishRealtimeEvent } from "@/lib/realtime";
+
+export async function GET(request: Request) {
+  try {
+    enforceRateLimit(request, "message-history", 120);
+    const token = request.headers.get("authorization")?.match(/^Bearer ([a-f0-9]{64})$/i)?.[1];
+    const parsed = chatHistorySchema.safeParse({ sessionToken: token });
+    if (!parsed.success) return validationError(parsed.error);
+
+    const session = await requireSession(parsed.data.sessionToken);
+    const messages = await listRecentMessages(session.id);
+    return Response.json({ messages }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    return apiError(error);
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -20,6 +37,7 @@ export async function POST(request: Request) {
     if (!parsed.success) return validationError(parsed.error);
     const input = parsed.data;
     const session = await requireSession(input.sessionToken);
+    await deleteExpiredMessages();
     const mode = await getCurrentServiceMode();
     const userText = sanitizePlainText(input.text ?? "", 1000);
     const inboundId = await createMessage({
@@ -27,6 +45,32 @@ export async function POST(request: Request) {
       messageType: "user",
       body: userText || (input.faqId ? `FAQ ${input.faqId}` : `Category ${input.categoryId}`),
     });
+
+    if (mode === "day") {
+      const conversation = await queueConversationForAgent(session.id);
+      const text = input.languageCode === "hi"
+        ? "आपका संदेश एजेंट की कतार में भेज दिया गया है। हमारी टीम इसी चैट में सहायता करेगी।"
+        : "Your message is in the agent queue. Our team will reply here in this chat.";
+      await createMessage({
+        sessionId: session.id,
+        messageType: "assistant",
+        body: text,
+      });
+      await createAuditLog("agent_message_queued", session.id, {
+        messageId: inboundId,
+        status: conversation?.agent_chat_status ?? "waiting",
+      });
+      await publishRealtimeEvent(session.id, "status");
+      return Response.json({
+        mode,
+        response: {
+          type: "support",
+          text,
+          matchType: "fallback",
+          quickReplies: [],
+        },
+      });
+    }
 
     let response: {
       type: "faq" | "category" | "fallback" | "support";

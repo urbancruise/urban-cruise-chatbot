@@ -3,10 +3,33 @@ import { z } from "zod";
 export const sessionSchema = z
   .object({
     languageCode: z.enum(["en", "hi"]).default("en"),
+    locationSlug: z.string().min(1).max(80).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).default("global"),
   })
   .strict();
 
+export const agentConversationLocationSchema = z.union([
+  z.literal("all"),
+  z.string().min(1).max(80).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+]);
+
 export const sessionTokenSchema = z.string().regex(/^[a-f0-9]{64}$/i);
+
+export const chatHistorySchema = z.object({
+  sessionToken: sessionTokenSchema,
+}).strict();
+
+export const agentLoginSchema = z.object({
+  username: z.string().trim().min(3).max(80).regex(/^[a-zA-Z0-9._-]+$/),
+  password: z.string().min(12).max(128),
+}).strict();
+
+export const agentReplySchema = z.object({
+  text: z.string().trim().min(1).max(2000),
+}).strict();
+
+export const agentConversationStatusSchema = z.object({
+  status: z.literal("closed"),
+}).strict();
 
 export const messageSchema = z
   .object({

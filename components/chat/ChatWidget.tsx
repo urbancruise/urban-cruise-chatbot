@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { io } from "socket.io-client";
 import { welcomeMenu } from "@/lib/chat/content";
 import type { ChatMessage } from "./MessageList";
 import type { QuickReply } from "./QuickReplies";
@@ -38,44 +39,73 @@ export default function ChatWidget({
   const [categoryMenu, setCategoryMenu] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [pollError, setPollError] = useState("");
   const [sending, setSending] = useState(false);
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
+  const [agentTyping, setAgentTyping] = useState(false);
   const dialogRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const leadIdempotencyKey = useRef<string | null>(null);
   const initialLanguage = useRef(languageCode);
+  const agentTypingTimer = useRef<number | null>(null);
 
   useEffect(() => {
     let active = true;
     async function initialize() {
       try {
-        const [configResponse, categoriesResponse, sessionResponse] = await Promise.all([
+        const [configResponse, categoriesResponse] = await Promise.all([
           fetch("/api/chat/config", { cache: "no-store" }),
           fetch("/api/chat/faqs/categories", { cache: "no-store" }),
-          fetch("/api/chat/sessions", {
+        ]);
+        if (!configResponse.ok || !categoriesResponse.ok) {
+          throw new Error("Chat service is temporarily unavailable. Please try again later.");
+        }
+        const [configData, categoryData] = await Promise.all([
+          configResponse.json(),
+          categoriesResponse.json(),
+        ]);
+        const storedToken = window.localStorage.getItem("urban-cruise-chat-session");
+        let history: ChatMessage[] = [];
+        let token = "";
+        let tokenToPersist = "";
+        if (storedToken && /^[a-f0-9]{64}$/i.test(storedToken)) {
+          const historyResponse = await fetch("/api/chat/messages", {
+            headers: { Authorization: `Bearer ${storedToken}` },
+            cache: "no-store",
+          });
+          if (historyResponse.ok) {
+            const historyData = await historyResponse.json();
+            history = historyData.messages as ChatMessage[];
+            token = storedToken;
+          } else if (historyResponse.status !== 401) {
+            throw new Error("Chat history could not be loaded. Please try again later.");
+          }
+        }
+        if (!token) {
+          const sessionResponse = await fetch("/api/chat/sessions", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ languageCode: initialLanguage.current }),
-          }),
-        ]);
-        if (!configResponse.ok || !categoriesResponse.ok || !sessionResponse.ok) {
-          throw new Error("Chat service is temporarily unavailable. Please try again later.");
+          });
+          if (!sessionResponse.ok) {
+            throw new Error("Chat service is temporarily unavailable. Please try again later.");
+          }
+          const sessionData = await sessionResponse.json();
+          token = sessionData.sessionToken as string;
+          tokenToPersist = token;
         }
-        const [configData, categoryData, sessionData] = await Promise.all([
-          configResponse.json(),
-          categoriesResponse.json(),
-          sessionResponse.json(),
-        ]);
         if (!active) return;
+        if (tokenToPersist) {
+          window.localStorage.setItem("urban-cruise-chat-session", tokenToPersist);
+        }
         setConfig(configData as ChatConfig);
         setCategories(categoryData.categories as Category[]);
-        setSessionToken(sessionData.sessionToken as string);
-        setMessages([
-          {
-            id: "welcome",
-            author: "assistant",
-            text: (configData as ChatConfig).welcomeMessage[initialLanguage.current],
-          },
-        ]);
+        setSessionToken(token);
+        setMessages(history.length > 0 ? history : [{
+          id: "welcome",
+          author: "assistant",
+          text: (configData as ChatConfig).welcomeMessage[initialLanguage.current],
+        }]);
       } catch (initializeError) {
         if (!active) return;
         setError(
@@ -93,6 +123,105 @@ export default function ChatWidget({
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    const realtimeUrl = process.env.NEXT_PUBLIC_CHAT_REALTIME_URL;
+    if (!open || config?.mode !== "day" || !sessionToken || !realtimeUrl) return;
+
+    const socket = io(realtimeUrl, {
+      auth: { sessionToken },
+      reconnection: true,
+      timeout: 5000,
+    });
+    socket.on("connect", () => {
+      setRealtimeConnected(true);
+      setPollError("");
+    });
+    socket.on("disconnect", () => {
+      setRealtimeConnected(false);
+      setAgentTyping(false);
+    });
+    socket.on("connect_error", () => setRealtimeConnected(false));
+    socket.on("chat:agent-message", (event: unknown) => {
+      if (!event || typeof event !== "object") return;
+      const message = event as { id?: unknown; author?: unknown; text?: unknown };
+      if (typeof message.id !== "string" || typeof message.text !== "string") return;
+      const id = message.id;
+      const text = message.text;
+      setMessages((current) => current.some((item) => item.id === message.id)
+        ? current
+        : [...current, { id, author: "agent", text }]);
+    });
+    socket.on("agent:typing", (event: unknown) => {
+      if (!event || typeof event !== "object" || typeof (event as { typing?: unknown }).typing !== "boolean") return;
+      const typing = (event as { typing: boolean }).typing;
+      setAgentTyping(typing);
+      if (agentTypingTimer.current !== null) window.clearTimeout(agentTypingTimer.current);
+      if (typing) {
+        agentTypingTimer.current = window.setTimeout(() => {
+          setAgentTyping(false);
+          agentTypingTimer.current = null;
+        }, 3000);
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+      if (agentTypingTimer.current !== null) {
+        window.clearTimeout(agentTypingTimer.current);
+        agentTypingTimer.current = null;
+      }
+    };
+  }, [open, config?.mode, sessionToken]);
+
+  useEffect(() => {
+    if (!open || config?.mode !== "day" || !sessionToken) return;
+    let active = true;
+    let polling = false;
+
+    async function checkForAgentReplies() {
+      if (polling) return;
+      polling = true;
+      try {
+        const response = await fetch("/api/chat/messages", {
+          headers: { Authorization: `Bearer ${sessionToken}` },
+          cache: "no-store",
+        });
+        if (!response.ok) throw new Error("Agent replies are temporarily unavailable.");
+        const data = await response.json();
+        const agentMessages = (data.messages as ChatMessage[]).filter(
+          (message) => message.author === "agent",
+        );
+        if (!active) return;
+        setMessages((current) => {
+          const currentIds = new Set(current.map((message) => message.id));
+          const newMessages = agentMessages.filter((message) => !currentIds.has(message.id));
+          return newMessages.length ? [...current, ...newMessages] : current;
+        });
+        setPollError("");
+      } catch {
+        if (active) {
+          setPollError(
+            languageCode === "hi"
+              ? "एजेंट से कनेक्शन अभी उपलब्ध नहीं है।"
+              : "Live agent connection is temporarily unavailable.",
+          );
+        }
+      } finally {
+        polling = false;
+      }
+    }
+
+    void checkForAgentReplies();
+    const timer = window.setInterval(
+      () => void checkForAgentReplies(),
+      realtimeConnected ? 15000 : 5000,
+    );
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [open, config?.mode, sessionToken, languageCode, realtimeConnected]);
 
   useEffect(() => {
     if (open) closeRef.current?.focus();
@@ -266,8 +395,8 @@ export default function ChatWidget({
               : !config
                 ? "Service unavailable"
                 : config.mode === "day"
-                  ? "Support queue placeholder"
-                  : "Automated support"}
+                ? isHindi ? "एजेंट सहायता · 09:00–21:00 IST" : "Agent support · 09:00–21:00 IST"
+                : isHindi ? "स्वचालित FAQ · 21:00–09:00 IST" : "Automated FAQs · 21:00–09:00 IST"}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -304,8 +433,17 @@ export default function ChatWidget({
         </div>
       ) : (
         <>
-          {error && <p className="bg-red-50 px-4 py-2 text-xs text-red-900" role="alert">{error}</p>}
-          <MessageList messages={messages} onReply={selectReply} />
+          {(error || pollError) && (
+            <p className="bg-red-50 px-4 py-2 text-xs text-red-900" role="alert">
+              {error || pollError}
+            </p>
+          )}
+          <MessageList
+            messages={messages}
+            onReply={selectReply}
+            isTyping={sending || agentTyping}
+            typingLabel={isHindi ? "टाइप कर रहा है..." : "Typing..."}
+          />
 
           {messages.length <= 1 && (
             <nav className="border-t border-stone-200 px-4 py-3" aria-label={isHindi ? "मुख्य मेनू" : "Main menu"}>

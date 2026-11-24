@@ -32,9 +32,9 @@ export async function GET() {
         provisional: true,
       },
       support: {
-        liveChatAvailable: false,
+        liveChatAvailable: mode.mode === "day",
         videoAvailable: false,
-        queueStatus: "placeholder",
+        queueStatus: mode.mode === "day" ? "agent_inbox" : "automated_faq",
       },
     });
   } catch (error) {

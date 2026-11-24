@@ -4,6 +4,7 @@ import { enforceRateLimit } from "@/lib/api/rate-limit";
 import { sessionSchema } from "@/lib/chat/schemas";
 import { getCurrentServiceMode } from "@/lib/chat/business-hours";
 import { hashSessionToken } from "@/lib/api/session-auth";
+import { deleteExpiredMessages } from "@/lib/repositories/chatbotMessages";
 import { createSession } from "@/lib/repositories/chatbotSessions";
 
 export async function POST(request: Request) {
@@ -14,10 +15,12 @@ export async function POST(request: Request) {
 
     const token = randomBytes(32).toString("hex");
     const mode = await getCurrentServiceMode();
+    await deleteExpiredMessages();
     const sessionId = await createSession(
       hashSessionToken(token),
       parsed.data.languageCode,
       mode,
+      parsed.data.locationSlug,
     );
 
     return Response.json(
