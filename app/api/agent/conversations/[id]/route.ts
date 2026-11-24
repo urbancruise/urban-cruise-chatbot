@@ -15,6 +15,7 @@ import {
   findAgentConversation,
   listAgentConversationMessages,
 } from "@/lib/repositories/chatbotAgents";
+import { publishRealtimeEvent } from "@/lib/realtime";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -69,6 +70,7 @@ export async function POST(request: Request, { params }: RouteContext) {
       agentId: agent.id,
       messageId,
     });
+    await publishRealtimeEvent(parsedId.data, "message", messageId);
 
     return Response.json(
       {
@@ -103,6 +105,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       throw new ApiError("CONVERSATION_ASSIGNED", 409);
     }
     await createAuditLog("agent_conversation_closed", parsedId.data, { agentId: agent.id });
+    await publishRealtimeEvent(parsedId.data, "status");
     return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return apiError(error);

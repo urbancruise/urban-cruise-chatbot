@@ -13,6 +13,7 @@ import { listPublishedFaqs, listPublishedFaqsByCategory, findPublishedFaqById } 
 import { listPublishedFaqKeywords } from "@/lib/repositories/faqKeywords";
 import { listRelatedPublishedFaqs } from "@/lib/repositories/faqRelated";
 import { queueConversationForAgent } from "@/lib/repositories/chatbotAgents";
+import { publishRealtimeEvent } from "@/lib/realtime";
 
 export async function GET(request: Request) {
   try {
@@ -59,6 +60,7 @@ export async function POST(request: Request) {
         messageId: inboundId,
         status: conversation?.agent_chat_status ?? "waiting",
       });
+      await publishRealtimeEvent(session.id, "status");
       return Response.json({
         mode,
         response: {

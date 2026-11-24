@@ -4,8 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port 5001",
+    "dev:realtime": "node --env-file=.env.local scripts/realtime-server.mjs",
     "build": "next build",
     "start": "next start --port 5001",
+    "start:realtime": "node scripts/realtime-server.mjs",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -15,14 +17,18 @@
     "db:agent:create": "node --env-file=.env.local --import tsx scripts/create-agent.ts"
   },
   "dependencies": {
+    "jsonwebtoken": "^9.0.3",
     "mysql2": "^3.24.6",
     "next": "16.4.6",
     "react": "19.3.0",
     "react-dom": "19.3.0",
+    "socket.io": "^4.8.4",
+    "socket.io-client": "^4.8.4",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "4.3.3",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

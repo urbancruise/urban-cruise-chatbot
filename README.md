@@ -66,6 +66,41 @@ The migration runner applies numbered files under `db/migrations` in order and s
 - `npm run db:seed` creates the initial taxonomy and draft questions; it does not overwrite FAQ answers or publish drafts.
 - Chat transcripts are stored in `chatbot_messages` and restored for the same browser session. Messages older than 90 days are deleted when chat session/message endpoints run; also schedule `npm run db:prune-chat-history` to run daily from the repository root so retention is enforced during periods with no chat traffic.
 
+## Real-time chat
+
+The chatbot, CMS inbox, and public website use a separate Socket.IO service from the Next.js apps. REST APIs and MySQL remain authoritative; the widgets and CMS automatically fall back to polling if realtime is unavailable.
+
+For local development, add the following to the chatbot and CMS `.env.local` files. Use the same newly generated secret in both files; do not commit it or put it in a `NEXT_PUBLIC_*` variable.
+
+```dotenv
+CHATBOT_REALTIME_SECRET=replace-with-a-long-random-secret
+CHATBOT_REALTIME_URL=http://127.0.0.1:5002
+```
+
+In the chatbot `.env.local`, configure the Socket.IO service origin allowlist:
+
+```dotenv
+CHATBOT_REALTIME_PORT=5002
+CHATBOT_REALTIME_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5000,http://localhost:5001
+```
+
+Set this browser-facing URL in the chatbot, CMS, and website `.env.local` files:
+
+```dotenv
+NEXT_PUBLIC_CHAT_REALTIME_URL=http://localhost:5002
+```
+
+Run the chatbot app and realtime service in separate terminals:
+
+```sh
+npm run dev
+npm run dev:realtime
+```
+
+The service health check is `GET /health`. In production, set `CHATBOT_REALTIME_URL` to an address reachable by both server apps, set `NEXT_PUBLIC_CHAT_REALTIME_URL` to the public HTTPS endpoint, and list the exact public website, CMS, and chatbot origins in `CHATBOT_REALTIME_ALLOWED_ORIGINS`. Terminate TLS at the proxy and allow Socket.IO WebSocket upgrades. Keep the realtime service private to trusted servers for internal publishing; only browser Socket.IO connections need public access.
+
+`NEXT_PUBLIC_CHAT_REALTIME_URL` is embedded into each app at build time, so rebuild and restart the three apps after changing it. The service currently runs as one Socket.IO instance; add a shared Socket.IO adapter and sticky routing before horizontally scaling it.
+
 ## API
 
 | Endpoint | Purpose |

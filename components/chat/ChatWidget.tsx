@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { io } from "socket.io-client";
 import { welcomeMenu } from "@/lib/chat/content";
 import type { ChatMessage } from "./MessageList";
 import type { QuickReply } from "./QuickReplies";
@@ -40,10 +41,13 @@ export default function ChatWidget({
   const [error, setError] = useState("");
   const [pollError, setPollError] = useState("");
   const [sending, setSending] = useState(false);
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
+  const [agentTyping, setAgentTyping] = useState(false);
   const dialogRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const leadIdempotencyKey = useRef<string | null>(null);
   const initialLanguage = useRef(languageCode);
+  const agentTypingTimer = useRef<number | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -121,6 +125,56 @@ export default function ChatWidget({
   }, []);
 
   useEffect(() => {
+    const realtimeUrl = process.env.NEXT_PUBLIC_CHAT_REALTIME_URL;
+    if (!open || config?.mode !== "day" || !sessionToken || !realtimeUrl) return;
+
+    const socket = io(realtimeUrl, {
+      auth: { sessionToken },
+      reconnection: true,
+      timeout: 5000,
+    });
+    socket.on("connect", () => {
+      setRealtimeConnected(true);
+      setPollError("");
+    });
+    socket.on("disconnect", () => {
+      setRealtimeConnected(false);
+      setAgentTyping(false);
+    });
+    socket.on("connect_error", () => setRealtimeConnected(false));
+    socket.on("chat:agent-message", (event: unknown) => {
+      if (!event || typeof event !== "object") return;
+      const message = event as { id?: unknown; author?: unknown; text?: unknown };
+      if (typeof message.id !== "string" || typeof message.text !== "string") return;
+      const id = message.id;
+      const text = message.text;
+      setMessages((current) => current.some((item) => item.id === message.id)
+        ? current
+        : [...current, { id, author: "agent", text }]);
+    });
+    socket.on("agent:typing", (event: unknown) => {
+      if (!event || typeof event !== "object" || typeof (event as { typing?: unknown }).typing !== "boolean") return;
+      const typing = (event as { typing: boolean }).typing;
+      setAgentTyping(typing);
+      if (agentTypingTimer.current !== null) window.clearTimeout(agentTypingTimer.current);
+      if (typing) {
+        agentTypingTimer.current = window.setTimeout(() => {
+          setAgentTyping(false);
+          agentTypingTimer.current = null;
+        }, 3000);
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+      if (agentTypingTimer.current !== null) {
+        window.clearTimeout(agentTypingTimer.current);
+        agentTypingTimer.current = null;
+      }
+    };
+  }, [open, config?.mode, sessionToken]);
+
+  useEffect(() => {
     if (!open || config?.mode !== "day" || !sessionToken) return;
     let active = true;
     let polling = false;
@@ -159,12 +213,15 @@ export default function ChatWidget({
     }
 
     void checkForAgentReplies();
-    const timer = window.setInterval(() => void checkForAgentReplies(), 5000);
+    const timer = window.setInterval(
+      () => void checkForAgentReplies(),
+      realtimeConnected ? 15000 : 5000,
+    );
     return () => {
       active = false;
       window.clearInterval(timer);
     };
-  }, [open, config?.mode, sessionToken, languageCode]);
+  }, [open, config?.mode, sessionToken, languageCode, realtimeConnected]);
 
   useEffect(() => {
     if (open) closeRef.current?.focus();
@@ -384,7 +441,7 @@ export default function ChatWidget({
           <MessageList
             messages={messages}
             onReply={selectReply}
-            isTyping={sending}
+            isTyping={sending || agentTyping}
             typingLabel={isHindi ? "टाइप कर रहा है..." : "Typing..."}
           />
 
