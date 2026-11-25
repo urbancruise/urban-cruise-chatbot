@@ -12,7 +12,10 @@ import { listPublishedCategories, findPublishedCategoryById } from "@/lib/reposi
 import { listPublishedFaqs, listPublishedFaqsByCategory, findPublishedFaqById } from "@/lib/repositories/chatbotFaqs";
 import { listPublishedFaqKeywords } from "@/lib/repositories/faqKeywords";
 import { listRelatedPublishedFaqs } from "@/lib/repositories/faqRelated";
-import { queueConversationForAgent } from "@/lib/repositories/chatbotAgents";
+import {
+  findAgentConversation,
+  queueConversationForAgent,
+} from "@/lib/repositories/chatbotAgents";
 import { publishRealtimeEvent } from "@/lib/realtime";
 
 export async function GET(request: Request) {
@@ -47,15 +50,24 @@ export async function POST(request: Request) {
     });
 
     if (mode === "day") {
+      const previousConversation = await findAgentConversation(session.id);
+      const isFirstQueueMessage =
+        !previousConversation ||
+        previousConversation.agent_chat_status === "none" ||
+        previousConversation.agent_chat_status === "closed";
       const conversation = await queueConversationForAgent(session.id);
-      const text = input.languageCode === "hi"
-        ? "आपका संदेश एजेंट की कतार में भेज दिया गया है। हमारी टीम इसी चैट में सहायता करेगी।"
-        : "Your message is in the agent queue. Our team will reply here in this chat.";
-      await createMessage({
-        sessionId: session.id,
-        messageType: "assistant",
-        body: text,
-      });
+      const text = isFirstQueueMessage
+        ? input.languageCode === "hi"
+          ? "आपका संदेश एजेंट की कतार में भेज दिया गया है। हमारी टीम इसी चैट में सहायता करेगी।"
+          : "Your message is in the agent queue. Our team will reply here in this chat."
+        : "";
+      if (text) {
+        await createMessage({
+          sessionId: session.id,
+          messageType: "assistant",
+          body: text,
+        });
+      }
       await createAuditLog("agent_message_queued", session.id, {
         messageId: inboundId,
         status: conversation?.agent_chat_status ?? "waiting",
@@ -63,6 +75,7 @@ export async function POST(request: Request) {
       await publishRealtimeEvent(session.id, "status");
       return Response.json({
         mode,
+        queued: isFirstQueueMessage,
         response: {
           type: "support",
           text,

@@ -148,6 +148,11 @@ export default function ChatWidget({
       if (typeof message.id !== "string" || typeof message.text !== "string") return;
       const id = message.id;
       const text = message.text;
+      setAgentTyping(false);
+      if (agentTypingTimer.current !== null) {
+        window.clearTimeout(agentTypingTimer.current);
+        agentTypingTimer.current = null;
+      }
       setMessages((current) => current.some((item) => item.id === message.id)
         ? current
         : [...current, { id, author: "agent", text }]);
@@ -288,7 +293,15 @@ export default function ChatWidget({
           value: faq.id,
         })),
       ];
-      addMessage("assistant", result.text, replies);
+      if (result.text) addMessage("assistant", result.text, replies);
+      if (data.queued === false) {
+        setAgentTyping(true);
+        if (agentTypingTimer.current !== null) window.clearTimeout(agentTypingTimer.current);
+        agentTypingTimer.current = window.setTimeout(() => {
+          setAgentTyping(false);
+          agentTypingTimer.current = null;
+        }, 30000);
+      }
       if (config && data.mode !== config.mode) setConfig({ ...config, mode: data.mode });
     } catch (sendError) {
       setError(sendError instanceof Error ? sendError.message : "Your message could not be sent.");
@@ -441,7 +454,7 @@ export default function ChatWidget({
           <MessageList
             messages={messages}
             onReply={selectReply}
-            isTyping={sending || agentTyping}
+            isTyping={agentTyping}
             typingLabel={isHindi ? "टाइप कर रहा है..." : "Typing..."}
           />
 

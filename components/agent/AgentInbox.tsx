@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { io, type Socket } from "socket.io-client";
 
 interface Agent {
   id: string;
@@ -49,6 +50,7 @@ export default function AgentInbox() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const realtimeSocket = useRef<Socket | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -72,6 +74,34 @@ export default function AgentInbox() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!agent) {
+      realtimeSocket.current?.disconnect();
+      realtimeSocket.current = null;
+      return;
+    }
+    const realtimeUrl = process.env.NEXT_PUBLIC_CHAT_REALTIME_URL;
+    if (!realtimeUrl) return;
+    const socket = io(realtimeUrl, {
+      auth: { standaloneAgent: true },
+      withCredentials: true,
+      reconnection: true,
+      timeout: 5000,
+    });
+    realtimeSocket.current = socket;
+    return () => {
+      socket.disconnect();
+      if (realtimeSocket.current === socket) realtimeSocket.current = null;
+    };
+  }, [agent]);
+
+  useEffect(() => {
+    realtimeSocket.current?.emit("agent:typing", {
+      sessionId: Number(selectedId),
+      typing: false,
+    });
+  }, [selectedId]);
 
   useEffect(() => {
     if (!agent) return;
@@ -182,6 +212,10 @@ export default function AgentInbox() {
     event.preventDefault();
     const text = draft.trim();
     if (!selectedId || !text || sending) return;
+    realtimeSocket.current?.emit("agent:typing", {
+      sessionId: Number(selectedId),
+      typing: false,
+    });
     setSending(true);
     setError("");
     try {
@@ -406,7 +440,14 @@ export default function AgentInbox() {
                 <input
                   id="agent-reply"
                   value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
+                  onChange={(event) => {
+                    const nextDraft = event.target.value;
+                    setDraft(nextDraft);
+                    realtimeSocket.current?.emit("agent:typing", {
+                      sessionId: Number(selectedId),
+                      typing: nextDraft.trim().length > 0,
+                    });
+                  }}
                   maxLength={2000}
                   placeholder="Type your reply…"
                   disabled={sending}
