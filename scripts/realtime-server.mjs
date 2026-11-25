@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { createHash } from "node:crypto";
 import mysql from "mysql2/promise";
 import { Server } from "socket.io";
 import { z } from "zod";
@@ -99,6 +100,14 @@ io.use(async (socket, next) => {
       return next();
     }
 
+    if (auth.standaloneAgent === true) {
+      const agent = await findStandaloneAgentSession(socket.handshake.headers.cookie);
+      if (!agent) return next(new Error("Unauthorized"));
+      socket.data.kind = "standalone-agent";
+      socket.data.userId = Number(agent.id);
+      return next();
+    }
+
     if (typeof auth.cmsTicket === "string" && !auth.sessionToken) {
       const user = await verifyCmsTicket(auth.cmsTicket);
       if (!user) return next(new Error("Unauthorized"));
@@ -121,10 +130,29 @@ io.on("connection", (socket) => {
     return;
   }
 
-  socket.join("agents:queue");
-  socket.join(agentRoom(socket.data.userId));
-  socket.emit("realtime:ready", { role: "cms-agent" });
+  if (socket.data.kind === "standalone-agent") {
+    socket.join(agentRoom(socket.data.userId));
+    socket.emit("realtime:ready", { role: "standalone-agent" });
+    let lastTypingEventAt = 0;
+    socket.on("agent:typing", (payload) => {
+      const parsed = typingSchema.safeParse(payload);
+      if (!parsed.success) return;
+      const now = Date.now();
+      if (now - lastTypingEventAt < 250) return;
+      lastTypingEventAt = now;
+      void forwardStandaloneAgentTyping(socket.data.userId, parsed.data).catch((error) => {
+        console.error("[chat-realtime] Could not forward agent typing status.", error);
+      });
+    });
+    return;
+  } else {
+    socket.join("agents:queue");
+    socket.join(agentRoom(socket.data.userId));
+    socket.emit("realtime:ready", { role: "cms-agent" });
+  }
+
   const permissionTimer = setInterval(() => {
+    if (socket.data.kind === "standalone-agent") return;
     void isCmsUserAuthorized(socket.data.userId)
       .then((authorized) => {
         if (!authorized) {
@@ -147,7 +175,11 @@ io.on("connection", (socket) => {
     const now = Date.now();
     if (now - lastTypingEventAt < 250) return;
     lastTypingEventAt = now;
-    void forwardAgentTyping(socket.data.userId, parsed.data).catch((error) => {
+    const forward =
+      socket.data.kind === "standalone-agent"
+        ? forwardStandaloneAgentTyping
+        : forwardAgentTyping;
+    void forward(socket.data.userId, parsed.data).catch((error) => {
       console.error("[chat-realtime] Could not forward agent typing status.", error);
     });
   });
@@ -212,6 +244,27 @@ async function findCustomerSession(token) {
     `SELECT id FROM chatbot_sessions
      WHERE session_token_hash = ? AND status = 'active'
        AND last_activity_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 90 DAY)
+     LIMIT 1`,
+    [tokenHash],
+  );
+  return rows[0] || null;
+}
+
+async function findStandaloneAgentSession(cookieHeader) {
+  if (typeof cookieHeader !== "string") return null;
+  const cookie = cookieHeader
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith("urban_cruise_agent_session="));
+  if (!cookie) return null;
+  const token = cookie.slice("urban_cruise_agent_session=".length);
+  if (!/^[a-f0-9]{64}$/i.test(token)) return null;
+  const tokenHash = createHash("sha256").update(token).digest("hex");
+  const [rows] = await pool.execute(
+    `SELECT a.id
+     FROM chatbot_agent_sessions s
+     JOIN chatbot_agents a ON a.id = s.agent_id
+     WHERE s.token_hash = ? AND s.expires_at > UTC_TIMESTAMP() AND a.status = 'active'
      LIMIT 1`,
     [tokenHash],
   );
@@ -313,6 +366,21 @@ async function forwardAgentTyping(userId, input) {
        AND (assigned_cms_user_id IS NULL OR assigned_cms_user_id = ?)
      LIMIT 1`,
     [input.sessionId, userId],
+  );
+  if (rows[0]) {
+    io.to(customerRoom(input.sessionId)).emit("agent:typing", { typing: input.typing });
+  }
+}
+
+async function forwardStandaloneAgentTyping(agentId, input) {
+  const [rows] = await pool.execute(
+    `SELECT id FROM chatbot_sessions
+     WHERE id = ? AND status = 'active'
+       AND agent_chat_status IN ('waiting', 'active')
+       AND assigned_cms_user_id IS NULL
+       AND (assigned_agent_id IS NULL OR assigned_agent_id = ?)
+     LIMIT 1`,
+    [input.sessionId, agentId],
   );
   if (rows[0]) {
     io.to(customerRoom(input.sessionId)).emit("agent:typing", { typing: input.typing });

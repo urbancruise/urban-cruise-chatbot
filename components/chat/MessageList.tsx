@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import QuickReplies, { type QuickReply } from "./QuickReplies";
 
 export interface ChatMessage {
@@ -20,8 +21,17 @@ export default function MessageList({
   isTyping: boolean;
   typingLabel: string;
 }) {
+  const listRef = useRef<HTMLOListElement>(null);
+
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    list.scrollTo({ top: list.scrollHeight, behavior: "smooth" });
+  }, [messages, isTyping]);
+
   return (
     <ol
+      ref={listRef}
       className="flex-1 space-y-4 overflow-y-auto px-4 py-5"
       aria-label="Chat messages"
       aria-live="polite"
@@ -54,7 +64,12 @@ export default function MessageList({
       {isTyping && (
         <li className="flex justify-start" role="status" aria-label={typingLabel}>
           <div className="rounded-2xl rounded-bl-sm bg-stone-100 px-4 py-3 text-sm text-slate-700">
-            <span className="animate-pulse">{typingLabel}</span>
+            <span className="mr-2">{typingLabel}</span>
+            <span className="inline-flex gap-1 align-middle" aria-hidden="true">
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-500 [animation-delay:-0.2s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-500 [animation-delay:-0.1s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-500" />
+            </span>
           </div>
         </li>
       )}
