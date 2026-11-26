@@ -298,7 +298,7 @@ export default function AgentInbox() {
               className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2"
             />
           </label>
-          <button type="submit" className="w-full rounded-lg bg-emerald-800 px-4 py-2 font-semibold text-white hover:bg-emerald-900">
+          <button type="submit" className="w-full rounded-lg bg-[#03C35E] px-4 py-2 font-semibold text-white hover:bg-emerald-900">
             Sign in
           </button>
         </form>
@@ -365,7 +365,7 @@ export default function AgentInbox() {
                 aria-pressed={locationFilter === item.location_slug}
                 className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${
                   locationFilter === item.location_slug
-                    ? "bg-emerald-800 text-white"
+                    ? "bg-[#03C35E] text-white"
                     : "bg-stone-100 text-slate-700 hover:bg-emerald-50"
                 }`}
               >
@@ -425,7 +425,7 @@ export default function AgentInbox() {
                 {messages.map((message) => (
                   <li key={message.id} className={`flex ${message.author === "user" ? "justify-start" : "justify-end"}`}>
                     <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${
-                      message.author === "user" ? "bg-white text-slate-900" : "bg-emerald-800 text-white"
+                      message.author === "user" ? "bg-white text-slate-900" : "bg-[#03C35E] text-white"
                     }`}>
                       <p className="mb-1 text-xs font-semibold opacity-80">
                         {message.author === "user" ? "Customer" : message.author === "agent" ? "Agent" : "Chatbot"}
@@ -453,7 +453,7 @@ export default function AgentInbox() {
                   disabled={sending}
                   className="min-w-0 flex-1 rounded-lg border border-stone-300 px-3 py-2 text-sm"
                 />
-                <button type="submit" disabled={sending || !draft.trim()} className="rounded-lg bg-emerald-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                <button type="submit" disabled={sending || !draft.trim()} className="rounded-lg bg-[#03C35E] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
                   Reply
                 </button>
               </form>

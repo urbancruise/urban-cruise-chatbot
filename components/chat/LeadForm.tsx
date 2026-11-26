@@ -85,7 +85,7 @@ export default function LeadForm({
               type="checkbox"
               checked={consentGiven}
               onChange={(event) => setConsentGiven(event.target.checked)}
-              className="mt-1 h-4 w-4 accent-emerald-800"
+              className="mt-1 h-4 w-4 accent-[#03C35E]"
             />
             <span>{isHindi ? "मैं इस पूछताछ के जवाब के लिए संपर्क की अनुमति देता/देती हूँ।" : "I agree to be contacted about this enquiry."}</span>
           </label>
@@ -137,7 +137,7 @@ export default function LeadForm({
             </div>
           </div>
           <label className="flex items-center gap-2 text-xs text-slate-800">
-            <input type="checkbox" checked={roundTrip} onChange={(event) => setRoundTrip(event.target.checked)} className="h-4 w-4 accent-emerald-800" />
+            <input type="checkbox" checked={roundTrip} onChange={(event) => setRoundTrip(event.target.checked)} className="h-4 w-4 accent-[#03C35E]" />
             {isHindi ? "वापसी यात्रा शामिल करें" : "Include a return journey"}
           </label>
           {roundTrip && (
@@ -171,7 +171,7 @@ export default function LeadForm({
           {error && <p className="text-sm text-red-800" role="alert">{error}</p>}
           <div className="flex justify-end gap-2">
             <button type="button" onClick={onCancel} className="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-stone-100">{isHindi ? "वापस" : "Back"}</button>
-            <button type="submit" disabled={pending} className="rounded-lg bg-emerald-800 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-900 disabled:opacity-60">
+            <button type="submit" disabled={pending} className="rounded-lg bg-[#03C35E] px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-900 disabled:opacity-60">
               {pending ? (isHindi ? "भेज रहे हैं..." : "Sending...") : (isHindi ? "पूछताछ भेजें" : "Send enquiry")}
             </button>
           </div>

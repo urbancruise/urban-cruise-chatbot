@@ -54,7 +54,7 @@ export default function FaqSearch({
         <button
           type="submit"
           disabled={loading}
-          className="rounded-lg bg-emerald-800 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-900 disabled:opacity-60"
+          className="rounded-lg bg-[#03C35E] px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-900 disabled:opacity-60"
         >
           {loading ? "…" : languageCode === "hi" ? "खोजें" : "Search"}
         </button>

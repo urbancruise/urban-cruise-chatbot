@@ -1,78 +1,104 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import Image from "next/image";
+import { useState } from "react";
+import { FaRobot, FaUser } from "react-icons/fa";
 import QuickReplies, { type QuickReply } from "./QuickReplies";
 
 export interface ChatMessage {
   id: string;
-  author: "assistant" | "agent" | "user";
+  author: "user" | "assistant" | "agent";
   text: string;
   replies?: QuickReply[];
+}
+
+// Helper component for Avatars to handle image error fallbacks smoothly
+function Avatar({ type }: { type: "user" | "agent" | "assistant" }) {
+  const [imageError, setImageError] = useState(false);
+
+  const isUser = type === "user";
+  const isAgent = type === "agent";
+
+  // Image paths (Make sure to place your images in the public folder)
+  const imageSrc = isUser ? "/image/user-avatar.png" : "/image/agent-avatar.png";
+
+  // Fallback background colors
+  const bgColor = isUser ? "bg-slate-200" : "bg-emerald-100";
+  const iconColor = isUser ? "text-slate-500" : "text-[#03C35E]";
+
+  if (imageError) {
+    return (
+      <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full ${bgColor} ${iconColor}`}>
+        {isUser ? <FaUser className="h-4 w-4" /> : <FaRobot className="h-4 w-4" />}
+      </div>
+    );
+  }
+
+  return (
+    <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full ${bgColor}`}>
+      <Image
+        src={imageSrc}
+        alt={isUser ? "User Avatar" : "Agent Avatar"}
+        width={32}
+        height={32}
+        className="h-full w-full object-cover"
+        onError={() => setImageError(true)}
+      />
+    </div>
+  );
 }
 
 export default function MessageList({
   messages,
   onReply,
-  isTyping,
-  typingLabel,
 }: {
   messages: ChatMessage[];
   onReply: (reply: QuickReply) => void;
-  isTyping: boolean;
-  typingLabel: string;
 }) {
-  const listRef = useRef<HTMLOListElement>(null);
-
-  useEffect(() => {
-    const list = listRef.current;
-    if (!list) return;
-    list.scrollTo({ top: list.scrollHeight, behavior: "smooth" });
-  }, [messages, isTyping]);
-
   return (
-    <ol
-      ref={listRef}
-      className="flex-1 space-y-4 overflow-y-auto px-4 py-5"
-      aria-label="Chat messages"
-      aria-live="polite"
-      aria-relevant="additions text"
-    >
-      {messages.map((message) => (
-        <li
-          key={message.id}
-          className={`flex ${message.author === "user" ? "justify-end" : "justify-start"}`}
-        >
+    <div className="flex flex-col gap-4 p-4">
+      {messages.map((message, index) => {
+        const isUser = message.author === "user";
+
+        return (
           <div
-            className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6 ${
-              message.author === "user"
-                ? "rounded-br-sm bg-emerald-800 text-white"
-                : "rounded-bl-sm bg-stone-100 text-slate-900"
+            key={message.id || index}
+            className={`flex w-full items-end gap-2 ${
+              isUser ? "justify-end" : "justify-start"
             }`}
           >
-            {message.author === "agent" && (
-              <span className="mb-1 block text-xs font-semibold text-emerald-900">
-                Urban Cruise agent
-              </span>
-            )}
-            <p className="whitespace-pre-wrap break-words">{message.text}</p>
-            {message.author === "assistant" && message.replies && (
-              <QuickReplies replies={message.replies} onSelect={onReply} />
-            )}
+            {/* Left Side Avatar (Agent / Bot) */}
+            {!isUser && <Avatar type={message.author} />}
+
+            {/* Message Bubble */}
+            <div
+              className={`flex max-w-[75%] flex-col rounded-2xl px-4 py-3 text-sm shadow-sm ${
+                isUser
+                  ? "rounded-br-sm bg-[#03C35E] text-white" // User bubble
+                  : message.author === "agent"
+                  ? "rounded-bl-sm bg-emerald-600 text-white" // Live Agent bubble
+                  : "rounded-bl-sm border border-stone-100 bg-white text-slate-800" // Bot bubble
+              }`}
+            >
+              {/* Optional: Add a small label above bot/agent messages */}
+              {!isUser && (
+                <span className="mb-1 text-[10px] font-bold uppercase tracking-wider opacity-80">
+                  {message.author === "agent" ? "Support Agent" : "Urban Cruise"}
+                </span>
+              )}
+
+              <p className="whitespace-pre-wrap break-words">{message.text}</p>
+
+              {message.replies && message.replies.length > 0 && (
+                <QuickReplies replies={message.replies} onSelect={onReply} />
+              )}
+            </div>
+
+            {/* Right Side Avatar (User) */}
+            {isUser && <Avatar type="user" />}
           </div>
-        </li>
-      ))}
-      {isTyping && (
-        <li className="flex justify-start" role="status" aria-label={typingLabel}>
-          <div className="rounded-2xl rounded-bl-sm bg-stone-100 px-4 py-3 text-sm text-slate-700">
-            <span className="mr-2">{typingLabel}</span>
-            <span className="inline-flex gap-1 align-middle" aria-hidden="true">
-              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-500 [animation-delay:-0.2s]" />
-              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-500 [animation-delay:-0.1s]" />
-              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-500" />
-            </span>
-          </div>
-        </li>
-      )}
-    </ol>
+        );
+      })}
+    </div>
   );
 }

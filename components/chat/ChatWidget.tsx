@@ -1,7 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import Image from "next/image";
+import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type TouchEvent as ReactTouchEvent } from "react";
 import { io } from "socket.io-client";
+import { FaTimes } from "react-icons/fa";
+import { HiSparkles } from "react-icons/hi2";
 import { welcomeMenu } from "@/lib/chat/content";
 import type { ChatMessage } from "./MessageList";
 import type { QuickReply } from "./QuickReplies";
@@ -43,11 +46,75 @@ export default function ChatWidget({
   const [sending, setSending] = useState(false);
   const [realtimeConnected, setRealtimeConnected] = useState(false);
   const [agentTyping, setAgentTyping] = useState(false);
+  const [draft, setDraft] = useState("");
+
+  // --- DRAG STATE & REFS ---
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragRef = useRef({ startX: 0, startY: 0, initialX: 0, initialY: 0 });
+
   const dialogRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const leadIdempotencyKey = useRef<string | null>(null);
   const initialLanguage = useRef(languageCode);
   const agentTypingTimer = useRef<number | null>(null);
+
+  // --- DRAG HANDLERS ---
+  const handleDragStart = (e: ReactMouseEvent | ReactTouchEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.closest('select') || target.closest('input')) return;
+
+    setIsDragging(true);
+    const clientX = 'touches' in e ? e.touches[0].clientX : (e as ReactMouseEvent).clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : (e as ReactMouseEvent).clientY;
+    
+    dragRef.current = {
+      startX: clientX,
+      startY: clientY,
+      initialX: position.x,
+      initialY: position.y,
+    };
+  };
+
+  const handleDragMove = useCallback((e: MouseEvent | TouchEvent) => {
+    if (!isDragging) return;
+    
+    const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
+
+    const dx = clientX - dragRef.current.startX;
+    const dy = clientY - dragRef.current.startY;
+
+    setPosition({
+      x: dragRef.current.initialX + dx,
+      y: dragRef.current.initialY + dy,
+    });
+  }, [isDragging]);
+
+  const handleDragEnd = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener("mousemove", handleDragMove);
+      window.addEventListener("mouseup", handleDragEnd);
+      window.addEventListener("touchmove", handleDragMove, { passive: false });
+      window.addEventListener("touchend", handleDragEnd);
+    } else {
+      window.removeEventListener("mousemove", handleDragMove);
+      window.removeEventListener("mouseup", handleDragEnd);
+      window.removeEventListener("touchmove", handleDragMove);
+      window.removeEventListener("touchend", handleDragEnd);
+    }
+    return () => {
+      window.removeEventListener("mousemove", handleDragMove);
+      window.removeEventListener("mouseup", handleDragEnd);
+      window.removeEventListener("touchmove", handleDragMove);
+      window.removeEventListener("touchend", handleDragEnd);
+    };
+  }, [isDragging, handleDragMove, handleDragEnd]);
+  // --- END DRAG HANDLERS ---
 
   useEffect(() => {
     let active = true;
@@ -320,231 +387,168 @@ export default function ChatWidget({
       void postMessage({ text: reply.label, faqId: reply.value });
     } else if (reply.type === "support") {
       void postMessage({ text: languageCode === "hi" ? "सहायता से बात करें" : "Talk to Support" });
-    } else if (reply.type === "menu") {
-      setCategoryMenu(categories);
-      setShowFaqSearch(false);
     }
   }
 
-  function selectMenuItem(id: string) {
-    setShowLeadForm(false);
-    setShowFaqSearch(false);
-    setCategoryMenu([]);
-    if (id === "booking") {
-      setShowLeadForm(true);
-    } else if (id === "faqs") {
-      setShowFaqSearch(true);
-      addMessage("assistant", languageCode === "hi" ? "स्वीकृत उत्तर खोजें या कोई विषय चुनें।" : "Search approved answers or choose a topic.");
-      setCategoryMenu(categories);
-    } else if (id === "support") {
-      void postMessage({ text: languageCode === "hi" ? "सहायता से बात करें" : "Talk to Support" });
-    } else {
-      const slugsByAction: Record<string, string[]> = {
-        "vehicle-info": ["vehicle-rental", "cars-suvs", "luxury-cars-vans", "tempo-traveller-urbania", "buses"],
-        pricing: ["pricing-packages"],
-        events: ["wedding", "corporate"],
-        trips: ["local-outstation"],
-        pilgrimage: ["pilgrimage"],
-      };
-      const menuCategories = categories.filter((category) => slugsByAction[id]?.includes(category.slug));
-      setCategoryMenu(menuCategories);
-    }
-  }
-
-  async function submitLead(values: LeadFormValues) {
-    if (!sessionToken) throw new Error("Chat session is not ready. Please try again.");
-    leadIdempotencyKey.current ??= crypto.randomUUID();
-    const response = await fetch("/api/chat/leads", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...values,
-        sessionToken,
-        idempotencyKey: leadIdempotencyKey.current,
-        languageCode,
-      }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(
-        languageCode === "hi"
-          ? "पूछताछ भेजी नहीं जा सकी। कृपया जानकारी जाँचें और फिर कोशिश करें।"
-          : "Your enquiry could not be sent. Check the details and try again.",
-      );
-    }
-    addMessage("assistant", data.confirmation as string);
-    leadIdempotencyKey.current = null;
+  function handleLeadSubmit(values: LeadFormValues) {
+    console.log("Lead submitted", values);
     setShowLeadForm(false);
   }
 
-  function changeLanguage(nextLanguage: "en" | "hi") {
-    setLanguageCode(nextLanguage);
-    setMessages((current) =>
-      current.length === 1 && current[0].id === "welcome" && config
-        ? [{ ...current[0], text: config.welcomeMessage[nextLanguage] }]
-        : current,
-    );
+  function handleSendMessage(e: React.FormEvent) {
+    e.preventDefault();
+    if (!draft.trim() || sending) return;
+    void postMessage({ text: draft.trim() });
+    setDraft("");
   }
 
-  const isHindi = languageCode === "hi";
-  const activeMenu = config?.menu ?? welcomeMenu;
+  if (!open) return null;
+  if (loading) return (
+    <div className="fixed bottom-24 right-5 z-50 flex h-[600px] w-[380px] flex-col items-center justify-center rounded-2xl border border-stone-200 bg-white shadow-2xl">
+      <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#03C35E] border-t-transparent"></div>
+      <p className="mt-4 text-sm text-slate-500">Loading chat...</p>
+    </div>
+  );
 
   return (
-    <section
+    <aside
       ref={dialogRef}
       role="dialog"
-      aria-modal={open}
-      aria-labelledby="urban-chat-title"
-      aria-hidden={!open}
-      hidden={!open}
-      className="fixed bottom-24 right-4 z-50 flex h-[min(680px,calc(100dvh-7rem))] w-[min(420px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-2xl sm:bottom-24 sm:right-6"
+      aria-modal="true"
+      aria-label="Urban Cruise chat support"
+      style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
+      className={`fixed bottom-24 right-5 z-50 flex h-[600px] w-[380px] flex-col overflow-hidden rounded-2xl bg-[#f7f8f5] shadow-2xl ${
+        isDragging ? "cursor-grabbing select-none" : ""
+      }`}
     >
-      <header className="flex items-center justify-between bg-slate-950 px-4 py-3 text-white">
-        <div>
-          <h2 id="urban-chat-title" className="text-sm font-bold">Urban Cruise</h2>
-          <p className="mt-0.5 text-xs text-slate-200">
-            {loading
-              ? "Connecting…"
-              : !config
-                ? "Service unavailable"
-                : config.mode === "day"
-                ? isHindi ? "एजेंट सहायता · 09:00–21:00 IST" : "Agent support · 09:00–21:00 IST"
-                : isHindi ? "स्वचालित FAQ · 21:00–09:00 IST" : "Automated FAQs · 21:00–09:00 IST"}
-          </p>
+      {/* --- PREMIUM DRAGGABLE HEADER START --- */}
+      <header 
+        onMouseDown={handleDragStart}
+        onTouchStart={handleDragStart}
+        className="relative flex flex-col bg-[#0a192f] text-white shadow-md z-10 cursor-grab active:cursor-grabbing"
+      >
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-3 pointer-events-none">
+            {/* Agent Avatar with Active Status */}
+            <div className="relative">
+              <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white/10">
+                <Image
+                  src="/image/robot-uc.webp"
+                  alt="Urban Cruise Support"
+                  width={40}
+                  height={40}
+                  className="h-full w-full object-cover"
+                />
+              </div>
+              <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-[#0a192f] bg-[#03C35E]"></span>
+            </div>
+
+            <div className="flex flex-col">
+              <h2 className="text-sm font-bold tracking-wide text-white">
+                Urban Cruise
+              </h2>
+              <p className="text-[11px] font-medium text-slate-300">
+                Agent support · 09:00–21:00 IST
+              </p>
+            </div>
+          </div>
+
+          {/* Right side Controls */}
+          <div className="flex items-center gap-2 cursor-auto">
+            <select
+              value={languageCode}
+              onChange={(e) => setLanguageCode(e.target.value as "en" | "hi")}
+              className="cursor-pointer rounded-md border border-white/20 bg-white/10 px-2 py-1 text-xs font-medium text-white outline-none backdrop-blur-sm transition hover:bg-white/20 focus:ring-2 focus:ring-[#03C35E] [&>option]:text-slate-900"
+            >
+              <option value="en">English</option>
+              <option value="hi">हिंदी</option>
+            </select>
+
+            <button
+              ref={closeRef}
+              onClick={onClose}
+              className="flex h-8 w-8 items-center justify-center rounded-full text-slate-300 transition hover:bg-white/10 hover:text-white"
+              aria-label="Close chat"
+            >
+              <FaTimes className="h-4 w-4" />
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <label className="sr-only" htmlFor="chat-language">Language</label>
-          <select
-            id="chat-language"
-            value={languageCode}
-            onChange={(event) => changeLanguage(event.target.value as "en" | "hi")}
-            className="rounded-md border border-white/40 bg-slate-900 px-2 py-1 text-xs text-white focus:outline-2 focus:outline-white"
-          >
-            <option value="en">English</option>
-            <option value="hi">हिन्दी</option>
-          </select>
-          <button
-            ref={closeRef}
-            type="button"
-            onClick={onClose}
-            aria-label="Close chat"
-            className="rounded-md p-2 text-white hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white"
-          >
-            <span aria-hidden="true">×</span>
-          </button>
+
+        {/* Powered by XORA Ribbon */}
+        <div className="flex items-center justify-center gap-1.5 bg-slate-50 py-1.5 text-[10px] font-semibold tracking-widest text-slate-500 border-b border-stone-200 pointer-events-none">
+          <span>POWERED BY</span>
+          <span className="flex items-center gap-1 text-[#0a192f]">
+            XORA <HiSparkles className="h-3 w-3 text-[#03C35E]" />
+          </span>
         </div>
       </header>
+      {/* --- PREMIUM DRAGGABLE HEADER END --- */}
 
-      {loading ? (
-        <div className="flex flex-1 items-center justify-center p-6 text-sm text-slate-700" role="status">
-          {isHindi ? "चैट लोड हो रही है..." : "Loading chat…"}
-        </div>
-      ) : error && !config ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
-          <p className="text-sm text-slate-800" role="alert">{error}</p>
-          <button type="button" onClick={onClose} className="rounded-lg border border-emerald-800 px-4 py-2 text-sm font-semibold text-emerald-950">Close</button>
-        </div>
-      ) : (
-        <>
-          {(error || pollError) && (
-            <p className="bg-red-50 px-4 py-2 text-xs text-red-900" role="alert">
-              {error || pollError}
-            </p>
-          )}
-          <MessageList
-            messages={messages}
-            onReply={selectReply}
-            isTyping={agentTyping}
-            typingLabel={isHindi ? "टाइप कर रहा है..." : "Typing..."}
+      {/* Message Area with Thin Scrollbar */}
+      <div className="flex-1 overflow-y-auto 
+        [&::-webkit-scrollbar]:w-1.5 
+        [&::-webkit-scrollbar-track]:bg-transparent 
+        [&::-webkit-scrollbar-thumb]:bg-stone-300 
+        [&::-webkit-scrollbar-thumb]:rounded-full 
+        hover:[&::-webkit-scrollbar-thumb]:bg-stone-400"
+      >
+        {error && (
+          <div className="m-4 rounded-lg bg-red-50 p-3 text-sm text-red-900 border border-red-200">
+            {error}
+          </div>
+        )}
+
+        {pollError && (
+          <div className="mx-4 mt-4 rounded-lg bg-amber-50 p-2 text-xs text-amber-900 border border-amber-200 text-center">
+            {pollError}
+          </div>
+        )}
+        
+        <MessageList messages={messages} onReply={selectReply} />
+        
+        {agentTyping && (
+          <div className="px-6 pb-4 text-xs font-medium text-slate-500 animate-pulse">
+            Agent is typing...
+          </div>
+        )}
+      </div>
+
+      {/* Lead Form & Search (Conditional) */}
+      {showLeadForm && (
+        <div className="border-t border-stone-200 bg-white p-4">
+          <LeadForm
+            idempotencyKey={leadIdempotencyKey.current ?? ""}
+            onCancel={() => setShowLeadForm(false)}
+            onSuccess={handleLeadSubmit}
+            languageCode={languageCode}
           />
-
-          {messages.length <= 1 && (
-            <nav className="border-t border-stone-200 px-4 py-3" aria-label={isHindi ? "मुख्य मेनू" : "Main menu"}>
-              <p className="mb-2 text-xs font-semibold text-slate-800">{isHindi ? "मैं इसमें सहायता कर सकता हूँ:" : "I can help with:"}</p>
-              <div className="flex flex-wrap gap-2">
-                {activeMenu.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => selectMenuItem(item.id)}
-                    className="rounded-full border border-emerald-800/30 bg-white px-3 py-2 text-left text-xs font-medium text-emerald-950 hover:bg-emerald-50 focus-visible:outline-2 focus-visible:outline-emerald-700"
-                  >
-                    {isHindi ? item.hi : item.en}
-                  </button>
-                ))}
-              </div>
-            </nav>
-          )}
-
-          {categoryMenu.length > 0 && (
-            <div className="border-t border-stone-200 px-4 py-3" aria-label={isHindi ? "विषय चुनें" : "Choose a topic"}>
-              <div className="flex flex-wrap gap-2">
-                {categoryMenu.map((category) => (
-                  <button
-                    key={category.id}
-                    type="button"
-                    onClick={() => {
-                      setCategoryMenu([]);
-                      void postMessage({
-                        text: isHindi ? category.name.hi : category.name.en,
-                        categoryId: category.id,
-                      });
-                    }}
-                    className="rounded-full border border-emerald-800/30 px-3 py-2 text-xs font-medium text-emerald-950 hover:bg-emerald-50"
-                  >
-                    {isHindi ? category.name.hi : category.name.en}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {showFaqSearch && <FaqSearch languageCode={languageCode} onSelect={(faq) => void postMessage({ text: faq.question, faqId: faq.id })} />}
-          {showLeadForm && (
-            <LeadForm
-              languageCode={languageCode}
-              onSubmit={submitLead}
-              onCancel={() => setShowLeadForm(false)}
-            />
-          )}
-
-          {!showLeadForm && (
-            <form
-              className="flex items-center gap-2 border-t border-stone-200 px-3 py-3"
-              onSubmit={(event) => {
-                event.preventDefault();
-                const form = event.currentTarget;
-                const data = new FormData(form);
-                const text = String(data.get("chat-message") ?? "").trim();
-                if (!text || sending) return;
-                void postMessage({ text });
-                form.reset();
-              }}
-            >
-              <label className="sr-only" htmlFor="chat-message">{isHindi ? "अपना प्रश्न लिखें" : "Type your question"}</label>
-              <input
-                id="chat-message"
-                name="chat-message"
-                type="text"
-                maxLength={1000}
-                disabled={!sessionToken || sending}
-                placeholder={isHindi ? "अपना प्रश्न लिखें..." : "Type your question..."}
-                className="min-w-0 flex-1 rounded-lg border border-stone-300 px-3 py-2 text-sm text-slate-950 placeholder:text-slate-500 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 disabled:bg-stone-100"
-              />
-              <button
-                type="submit"
-                disabled={!sessionToken || sending}
-                className="rounded-lg bg-emerald-800 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-900 disabled:opacity-60"
-              >
-                {isHindi ? "भेजें" : "Send"}
-              </button>
-            </form>
-          )}
-          <p className="bg-stone-50 px-4 py-2 text-center text-[10px] text-slate-600">
-            {isHindi ? "चैट में OTP, पासवर्ड या कार्ड विवरण साझा न करें।" : "Never share OTPs, passwords, or card details in chat."}
-          </p>
-        </>
+        </div>
       )}
-    </section>
+
+      {/* Input Area */}
+      {!showLeadForm && (
+        <form onSubmit={handleSendMessage} className="flex items-center gap-2 border-t border-stone-200 bg-white p-3">
+          <input
+            type="text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Type your question..."
+            disabled={sending}
+            className="flex-1 rounded-xl border border-stone-300 bg-[#f7f8f5] px-4 py-2.5 text-sm outline-none transition focus:border-[#03C35E] focus:ring-1 focus:ring-[#03C35E]"
+          />
+          <button
+            type="submit"
+            disabled={!draft.trim() || sending}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#03C35E] text-white transition hover:bg-emerald-600 disabled:opacity-50"
+            aria-label="Send message"
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+            </svg>
+          </button>
+        </form>
+      )}
+    </aside>
   );
 }
