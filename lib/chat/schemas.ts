@@ -18,6 +18,12 @@ export const chatHistorySchema = z.object({
   sessionToken: sessionTokenSchema,
 }).strict();
 
+export const videoCallRequestSchema = z.object({
+  sessionToken: sessionTokenSchema,
+  name: z.string().trim().min(1).max(120),
+  email: z.string().trim().email().max(254),
+}).strict();
+
 export const agentLoginSchema = z.object({
   username: z.string().trim().min(3).max(80).regex(/^[a-zA-Z0-9._-]+$/),
   password: z.string().min(12).max(128),
