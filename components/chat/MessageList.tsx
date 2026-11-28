@@ -1,7 +1,5 @@
 "use client";
 
-import Image from "next/image";
-import { useState } from "react";
 import { FaRobot, FaUser } from "react-icons/fa";
 import QuickReplies, { type QuickReply } from "./QuickReplies";
 
@@ -12,38 +10,14 @@ export interface ChatMessage {
   replies?: QuickReply[];
 }
 
-// Helper component for Avatars to handle image error fallbacks smoothly
 function Avatar({ type }: { type: "user" | "agent" | "assistant" }) {
-  const [imageError, setImageError] = useState(false);
-
   const isUser = type === "user";
-  const isAgent = type === "agent";
-
-  // Image paths (Make sure to place your images in the public folder)
-  const imageSrc = isUser ? "/image/user-avatar.png" : "/image/agent-avatar.png";
-
-  // Fallback background colors
   const bgColor = isUser ? "bg-slate-200" : "bg-emerald-100";
   const iconColor = isUser ? "text-slate-500" : "text-[#03C35E]";
 
-  if (imageError) {
-    return (
-      <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full ${bgColor} ${iconColor}`}>
-        {isUser ? <FaUser className="h-4 w-4" /> : <FaRobot className="h-4 w-4" />}
-      </div>
-    );
-  }
-
   return (
-    <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full ${bgColor}`}>
-      <Image
-        src={imageSrc}
-        alt={isUser ? "User Avatar" : "Agent Avatar"}
-        width={32}
-        height={32}
-        className="h-full w-full object-cover"
-        onError={() => setImageError(true)}
-      />
+    <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full ${bgColor} ${iconColor}`}>
+      {isUser ? <FaUser className="h-4 w-4" /> : <FaRobot className="h-4 w-4" />}
     </div>
   );
 }

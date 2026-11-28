@@ -4,7 +4,7 @@ import { db, type DbRow } from "@/lib/db";
 export interface ChatAgent extends DbRow {
   id: number;
   username: string;
-  display_name: string;
+  displayName: string;
 }
 
 export interface AgentConversation extends DbRow {
@@ -30,7 +30,7 @@ export async function findAgentByUsername(username: string) {
     password_salt: string;
     password_hash: string;
   }>>(
-    `SELECT id, username, display_name, password_salt, password_hash
+    `SELECT id, username, display_name AS displayName, password_salt, password_hash
      FROM chatbot_agents WHERE username = ? AND status = 'active' LIMIT 1`,
     [username],
   );
@@ -47,7 +47,7 @@ export async function createAgentSession(tokenHash: string, agentId: number) {
 
 export async function findAgentBySessionTokenHash(tokenHash: string) {
   const [rows] = await db.execute<ChatAgent[]>(
-    `SELECT a.id, a.username, a.display_name
+    `SELECT a.id, a.username, a.display_name AS displayName
      FROM chatbot_agent_sessions s
      JOIN chatbot_agents a ON a.id = s.agent_id
      WHERE s.token_hash = ? AND s.expires_at > UTC_TIMESTAMP() AND a.status = 'active'

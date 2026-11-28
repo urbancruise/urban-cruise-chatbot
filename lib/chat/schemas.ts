@@ -18,11 +18,30 @@ export const chatHistorySchema = z.object({
   sessionToken: sessionTokenSchema,
 }).strict();
 
+const timeZoneSchema = z.string().trim().min(1).max(64).refine((timeZone) => {
+  try {
+    new Intl.DateTimeFormat("en", { timeZone });
+    return true;
+  } catch {
+    return false;
+  }
+});
+
 export const videoCallRequestSchema = z.object({
   sessionToken: sessionTokenSchema,
   name: z.string().trim().min(1).max(120),
   email: z.string().trim().email().max(254),
-}).strict();
+  phone: z.string().regex(/^\+91[6-9]\d{9}$/, "Enter a valid Indian mobile number."),
+  allowAgentRecording: z.boolean().optional().default(false),
+  scheduledAt: z.string().datetime().optional(),
+  timeZone: timeZoneSchema.optional(),
+}).strict().refine(
+  (value) => !value.scheduledAt || Date.parse(value.scheduledAt) > Date.now(),
+  { path: ["scheduledAt"], message: "Scheduled time must be in the future." },
+).refine(
+  (value) => !value.scheduledAt || Boolean(value.timeZone),
+  { path: ["timeZone"], message: "A time zone is required for scheduled calls." },
+);
 
 export const agentLoginSchema = z.object({
   username: z.string().trim().min(3).max(80).regex(/^[a-zA-Z0-9._-]+$/),

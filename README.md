@@ -51,6 +51,23 @@ The support widget routes chats to CMS agents from 09:00–21:00 India time and 
 
    The development server is available at `http://localhost:5001`.
 
+### Scheduled video-call email
+
+The scheduled-call migration (`007_scheduled_video_calls.sql`) and video-room migration (`008_video_call_rooms.sql`) are applied by `npm run db:migrate`. Configure the following server-only values in `.env.local` and in the production chatbot app environment. Never commit SMTP credentials. For Gmail, use an app password rather than your account password.
+
+```dotenv
+APP_BASE_URL=http://localhost:5001
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_USER=your-sender@gmail.com
+SMTP_PASSWORD=your-smtp-app-password
+SMTP_FROM="Urban Cruise <your-sender@gmail.com>"
+```
+
+In production, set `APP_BASE_URL` to the public HTTPS website URL. After a successful schedule request, the customer receives an email with a unique link to the saved video call. The link expires 24 hours after the selected time; the daily `npm run db:prune-chat-history` job removes expired links and their contact details.
+
+Live video calls support up to five participants over browser peer-to-peer connections. Participant invite links are single-use and expire after 30 minutes. Call recordings are opt-in: recording starts only after every participant consents, is composed in the requesting browser, and is downloaded locally; recordings are not uploaded to Urban Cruise. In-call chat messages are saved to the agent conversation and retained for 90 days.
+
 The migration runner applies numbered files under `db/migrations` in order and stores each file name and SHA-256 checksum in `schema_migrations`. Do not edit an already-applied migration; add a new numbered migration instead. The seed command is safe to rerun.
 
 ## Configuration and approval

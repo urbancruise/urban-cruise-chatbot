@@ -6,6 +6,7 @@ export interface ChatSession extends DbRow {
   id: number;
   language_code: string;
   service_mode: "day" | "night";
+  location_slug: string;
   status: "active" | "closed";
 }
 
@@ -24,7 +25,7 @@ export async function createSession(
 
 export async function findActiveSessionByTokenHash(tokenHash: string) {
   const [rows] = await db.execute<ChatSession[]>(
-    `SELECT id, language_code, service_mode, status FROM chatbot_sessions
+    `SELECT id, language_code, service_mode, location_slug, status FROM chatbot_sessions
      WHERE session_token_hash = ? AND status = 'active'
        AND last_activity_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL ${CHAT_HISTORY_RETENTION_DAYS} DAY)
      LIMIT 1`,

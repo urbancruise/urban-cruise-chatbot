@@ -19,7 +19,7 @@ export async function GET(request: Request) {
     const agent = await getCurrentAgent(request);
     if (!agent) throw new ApiError("AGENT_UNAUTHENTICATED", 401);
     return Response.json(
-      { agent: { id: String(agent.id), username: agent.username, displayName: agent.display_name } },
+      { agent: { id: String(agent.id), username: agent.username, displayName: agent.displayName } },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
     const token = await startAgentSession(agent.id);
     await createAuditLog("agent_login", null, { agentId: agent.id });
     return Response.json(
-      { agent: { id: String(agent.id), username: agent.username, displayName: agent.display_name } },
+      { agent: { id: String(agent.id), username: agent.username, displayName: agent.displayName } },
       {
         status: 200,
         headers: {

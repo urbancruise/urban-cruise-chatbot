@@ -18,8 +18,17 @@ try {
   const [expiredSessions] = await connection.execute(
     "DELETE FROM chatbot_agent_sessions WHERE expires_at <= UTC_TIMESTAMP()",
   );
+  const [expiredVideoCallLinks] = await connection.execute(
+    "DELETE FROM chatbot_video_call_requests WHERE expires_at <= UTC_TIMESTAMP()",
+  );
+  const [expiredVideoCallInvites] = await connection.execute(
+    "DELETE FROM chatbot_video_call_invites WHERE expires_at <= UTC_TIMESTAMP() OR used_at IS NOT NULL",
+  );
+  const [expiredVideoCallRooms] = await connection.execute(
+    "DELETE FROM chatbot_video_call_rooms WHERE created_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 90 DAY)",
+  );
   console.log(
-    `Deleted ${result.affectedRows} chat messages older than 90 days and ${expiredSessions.affectedRows} expired agent sessions.`,
+    `Deleted ${result.affectedRows} chat messages older than 90 days, ${expiredSessions.affectedRows} expired agent sessions, ${expiredVideoCallLinks.affectedRows} expired scheduled-call links, ${expiredVideoCallInvites.affectedRows} expired or used call invites, and ${expiredVideoCallRooms.affectedRows} call rooms older than 90 days.`,
   );
 } finally {
   await connection.end();

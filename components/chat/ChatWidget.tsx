@@ -390,8 +390,39 @@ export default function ChatWidget({
     }
   }
 
-  function handleLeadSubmit(values: LeadFormValues) {
-    console.log("Lead submitted", values);
+  async function handleLeadSubmit(values: LeadFormValues) {
+    if (!sessionToken) {
+      throw new Error(languageCode === "hi"
+        ? "चैट सत्र तैयार नहीं है। कृपया फिर कोशिश करें।"
+        : "Your chat session is not ready. Please try again.");
+    }
+
+    const idempotencyKey = leadIdempotencyKey.current ?? crypto.randomUUID();
+    leadIdempotencyKey.current = idempotencyKey;
+    const response = await fetch("/api/chat/leads", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...values,
+        sessionToken,
+        idempotencyKey,
+        languageCode,
+      }),
+    });
+    const data = await response.json() as { confirmation?: unknown };
+    if (!response.ok) {
+      throw new Error(languageCode === "hi"
+        ? "आपकी पूछताछ भेजी नहीं जा सकी। कृपया फिर कोशिश करें।"
+        : "Your enquiry could not be sent. Please try again.");
+    }
+    if (typeof data.confirmation !== "string") {
+      throw new Error(languageCode === "hi"
+        ? "पूछताछ की पुष्टि नहीं मिल सकी। कृपया फिर कोशिश करें।"
+        : "The enquiry confirmation was missing. Please try again.");
+    }
+
+    addMessage("assistant", data.confirmation);
+    leadIdempotencyKey.current = null;
     setShowLeadForm(false);
   }
 
@@ -518,9 +549,8 @@ export default function ChatWidget({
       {showLeadForm && (
         <div className="border-t border-stone-200 bg-white p-4">
           <LeadForm
-            idempotencyKey={leadIdempotencyKey.current ?? ""}
             onCancel={() => setShowLeadForm(false)}
-            onSuccess={handleLeadSubmit}
+            onSubmit={handleLeadSubmit}
             languageCode={languageCode}
           />
         </div>

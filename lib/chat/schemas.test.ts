@@ -26,10 +26,31 @@ describe("chat location schemas", () => {
       sessionToken: "a".repeat(64),
       name: "Video Test",
       email: "video.test@example.com",
+      phone: "+919876543210",
     };
 
     expect(videoCallRequestSchema.safeParse(request).success).toBe(true);
+    expect(videoCallRequestSchema.parse({ ...request, allowAgentRecording: true }).allowAgentRecording).toBe(true);
+    expect(videoCallRequestSchema.parse(request).allowAgentRecording).toBe(false);
+    expect(videoCallRequestSchema.safeParse({ ...request, allowAgentRecording: "yes" }).success).toBe(false);
+    expect(videoCallRequestSchema.safeParse({
+      ...request,
+      scheduledAt: "2030-11-28T13:30:00.000Z",
+      timeZone: "Asia/Kolkata",
+    }).success).toBe(true);
+    expect(videoCallRequestSchema.safeParse({
+      ...request,
+      scheduledAt: "2030-11-28T13:30:00.000Z",
+    }).success).toBe(false);
+    expect(videoCallRequestSchema.safeParse({
+      ...request,
+      scheduledAt: "2030-11-28T13:30:00.000Z",
+      timeZone: "Invalid/Zone",
+    }).success).toBe(false);
+    expect(videoCallRequestSchema.safeParse({ ...request, scheduledAt: "2000-11-28T13:30:00.000Z" }).success).toBe(false);
     expect(videoCallRequestSchema.safeParse({ ...request, email: "invalid" }).success).toBe(false);
+    expect(videoCallRequestSchema.safeParse({ ...request, phone: "123" }).success).toBe(false);
+    expect(videoCallRequestSchema.safeParse({ ...request, scheduledAt: "not-a-date" }).success).toBe(false);
     expect(videoCallRequestSchema.safeParse({ ...request, sessionToken: "invalid" }).success).toBe(false);
   });
 });

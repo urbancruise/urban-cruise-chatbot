@@ -28,6 +28,27 @@ export async function listRecentMessages(sessionId: number) {
   }));
 }
 
+export async function listVideoCallTranscript(sessionId: number, createdAt: string) {
+  const [rows] = await db.execute<Array<RecentMessageRow & {
+    created_at: string;
+  }>>(
+    `SELECT id, message_type, body, created_at
+     FROM chatbot_messages
+     WHERE session_id = ?
+       AND message_type IN ('user', 'agent')
+       AND created_at >= ?
+       AND created_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL ${CHAT_HISTORY_RETENTION_DAYS} DAY)
+     ORDER BY id`,
+    [sessionId, createdAt],
+  );
+  return rows.map(row => ({
+    id: String(row.id),
+    author: row.message_type,
+    text: row.body,
+    createdAt: row.created_at,
+  }));
+}
+
 export async function deleteExpiredMessages() {
   await db.execute(
     `DELETE FROM chatbot_messages
