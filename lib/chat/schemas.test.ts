@@ -3,6 +3,7 @@ import {
   agentConversationLocationSchema,
   sessionSchema,
   videoCallRequestSchema,
+  videoCallRescheduleSchema,
 } from "./schemas";
 
 describe("chat location schemas", () => {
@@ -52,5 +53,19 @@ describe("chat location schemas", () => {
     expect(videoCallRequestSchema.safeParse({ ...request, phone: "123" }).success).toBe(false);
     expect(videoCallRequestSchema.safeParse({ ...request, scheduledAt: "not-a-date" }).success).toBe(false);
     expect(videoCallRequestSchema.safeParse({ ...request, sessionToken: "invalid" }).success).toBe(false);
+  });
+
+  it("validates rescheduling requests with a session token and future time", () => {
+    const request = {
+      sessionToken: "a".repeat(64),
+      scheduledAt: "2030-11-28T13:30:00.000Z",
+      timeZone: "Asia/Kolkata",
+    };
+
+    expect(videoCallRescheduleSchema.safeParse(request).success).toBe(true);
+    expect(videoCallRescheduleSchema.safeParse({ ...request, sessionToken: "invalid" }).success).toBe(false);
+    expect(videoCallRescheduleSchema.safeParse({ ...request, scheduledAt: "2000-11-28T13:30:00.000Z" }).success).toBe(false);
+    expect(videoCallRescheduleSchema.safeParse({ ...request, timeZone: "Invalid/Zone" }).success).toBe(false);
+    expect(videoCallRescheduleSchema.safeParse({ ...request, extra: true }).success).toBe(false);
   });
 });

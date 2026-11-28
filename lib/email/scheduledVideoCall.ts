@@ -15,6 +15,7 @@ interface ScheduledVideoCallEmail {
   scheduledAt: string;
   timeZone: string;
   joinUrl: string;
+  updated?: boolean;
 }
 
 export function createVideoCallJoinUrl(baseUrl: string, sessionToken: string) {
@@ -49,6 +50,9 @@ export async function sendScheduledVideoCallEmail(
   }).format(new Date(input.scheduledAt));
   const escapedName = escapeHtml(input.name);
   const escapedUrl = escapeHtml(input.joinUrl);
+  const scheduleMessage = input.updated
+    ? `Your video call time has been updated to ${formattedDate} (${input.timeZone}).`
+    : `Your video call is scheduled for ${formattedDate} (${input.timeZone}).`;
   const transporter = nodemailer.createTransport({
     host: config.host,
     port: config.port,
@@ -59,18 +63,20 @@ export async function sendScheduledVideoCallEmail(
   await transporter.sendMail({
     from: config.from,
     to: input.to,
-    subject: "Your Urban Cruise video call joining link",
+    subject: input.updated
+      ? "Your Urban Cruise video call time has been updated"
+      : "Your Urban Cruise video call joining link",
     text: [
       `Hello ${input.name},`,
       "",
-      `Your video call is scheduled for ${formattedDate} (${input.timeZone}).`,
+      scheduleMessage,
       `Join the call: ${input.joinUrl}`,
       "",
       "Our sales team will confirm availability.",
     ].join("\n"),
     html: [
       `<p>Hello ${escapedName},</p>`,
-      `<p>Your video call is scheduled for <strong>${escapeHtml(formattedDate)}</strong> (${escapeHtml(input.timeZone)}).</p>`,
+      `<p>${escapeHtml(scheduleMessage)}</p>`,
       `<p><a href="${escapedUrl}">Join your Urban Cruise video call</a></p>`,
       "<p>Our sales team will confirm availability.</p>",
     ].join(""),

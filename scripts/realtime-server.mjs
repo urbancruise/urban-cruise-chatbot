@@ -37,8 +37,10 @@ const httpServer = createServer((req, res) => {
         }
 
         const parsed = JSON.parse(body);
-        if (parsed.kind === "video_request" && parsed.payload?.roomId) {
+        if (parsed.kind === "video_request" && (parsed.payload?.roomId || parsed.payload?.scheduledAt)) {
           io.to("agents:queue").emit("video:incoming", parsed.payload);
+        } else if (parsed.kind === "video_request_rescheduled" && parsed.payload?.scheduledAt) {
+          io.to("agents:queue").emit("video:rescheduled", parsed.payload);
         } else if (parsed.kind === "call_chat" && parsed.payload?.roomId && parsed.payload?.message) {
           io.to(`call:${parsed.payload.roomId}`).emit("call:chat", parsed.payload.message);
         } else if (parsed.kind === "call_ended" && parsed.roomId) {

@@ -44,6 +44,7 @@ export default function AgentInbox() {
   const [queueConnection, setQueueConnection] = useState<QueueConnection>("connecting");
   const [queueError, setQueueError] = useState("");
   const [incomingVideoCall, setIncomingVideoCall] = useState<IncomingVideoCall | null>(null);
+  const [rescheduledVideoCall, setRescheduledVideoCall] = useState<IncomingVideoCall | null>(null);
   const [acceptingCall, setAcceptingCall] = useState(false);
   const [callAcceptError, setCallAcceptError] = useState("");
   const [inVideoCall, setInVideoCall] = useState(false);
@@ -137,6 +138,13 @@ export default function AgentInbox() {
           if (!active) return;
           setCallAcceptError("");
           setIncomingVideoCall(incoming);
+        });
+        socket.on("video:rescheduled", (incoming: IncomingVideoCall) => {
+          if (!active) return;
+          setIncomingVideoCall(current =>
+            current?.sessionId === incoming.sessionId ? incoming : current,
+          );
+          setRescheduledVideoCall(incoming);
         });
       } catch (error) {
         if (active) {
@@ -557,6 +565,31 @@ export default function AgentInbox() {
           </footer>
         </div>
       </div>
+
+      {rescheduledVideoCall && (
+        <div
+          role="status"
+          className="fixed right-4 top-4 z-[110] flex w-[calc(100%-2rem)] max-w-md items-start justify-between gap-4 rounded-2xl border border-emerald-200 bg-white p-4 text-[#183d36] shadow-xl sm:right-6 sm:top-6"
+        >
+          <div>
+            <p className="text-sm font-bold">Scheduled video call updated</p>
+            <p className="mt-1 text-sm text-slate-600">
+              {rescheduledVideoCall.name}
+              {rescheduledVideoCall.scheduledAt
+                ? ` · ${new Date(rescheduledVideoCall.scheduledAt).toLocaleString()}`
+                : ""}
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="Dismiss update"
+            onClick={() => setRescheduledVideoCall(null)}
+            className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+          >
+            <FaTimes />
+          </button>
+        </div>
+      )}
 
       {/* INCOMING CALL POPUP */}
       {incomingVideoCall && !inVideoCall && (

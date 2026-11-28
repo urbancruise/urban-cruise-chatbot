@@ -556,9 +556,28 @@ export default function ChatWidget({
         </div>
       )}
 
+      {showFaqSearch && !showLeadForm && (
+        <FaqSearch
+          languageCode={languageCode}
+          onSelect={(faq) => {
+            setShowFaqSearch(false);
+            selectReply({ type: "faq", label: faq.question, value: faq.id });
+          }}
+        />
+      )}
+
       {/* Input Area */}
       {!showLeadForm && (
         <form onSubmit={handleSendMessage} className="flex items-center gap-2 border-t border-stone-200 bg-white p-3">
+          <button
+            type="button"
+            onClick={() => setShowFaqSearch((current) => !current)}
+            aria-label={languageCode === "hi" ? "FAQ खोजें" : "Search FAQs"}
+            aria-expanded={showFaqSearch}
+            className="h-10 shrink-0 rounded-xl border border-stone-300 px-2.5 text-xs font-semibold text-slate-700 transition hover:border-emerald-700 hover:bg-emerald-50"
+          >
+            FAQ
+          </button>
           <input
             type="text"
             value={draft}
