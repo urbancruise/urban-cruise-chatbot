@@ -80,6 +80,8 @@ export default function VideoCallWidget({
   const [timePage, setTimePage] = useState(0);
   const [submittingSchedule, setSubmittingSchedule] = useState(false);
   const [scheduleSubmitted, setScheduleSubmitted] = useState(false);
+  const [scheduleEditToken, setScheduleEditToken] = useState("");
+  const [scheduleWasUpdated, setScheduleWasUpdated] = useState(false);
   const [agentNotificationSent, setAgentNotificationSent] = useState(true);
   const [inCall, setInCall] = useState(false);
   const [startingCall, setStartingCall] = useState(false);
@@ -167,25 +169,37 @@ export default function VideoCallWidget({
     setSubmittingSchedule(true);
     setCallError("");
     try {
-      const currentToken = await getCurrentSessionToken();
+      const isRescheduling = Boolean(scheduleEditToken);
+      const currentToken = scheduleEditToken || await getCurrentSessionToken();
       const [hours, minutes] = selectedTime.split(":").map(Number);
       const callDate = new Date(`${selectedDateValue}T00:00:00`);
       callDate.setHours(hours, minutes, 0, 0);
       const response = await fetch("/api/chat/video-request", {
-        method: "POST",
+        method: isRescheduling ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionToken: currentToken,
-          name: formData.name,
-          email: formData.email,
-          phone: `+91${formData.phone}`,
-          scheduledAt: callDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        }),
+        body: JSON.stringify(isRescheduling
+          ? {
+              sessionToken: currentToken,
+              scheduledAt: callDate.toISOString(),
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            }
+          : {
+              sessionToken: currentToken,
+              name: formData.name,
+              email: formData.email,
+              phone: `+91${formData.phone}`,
+              scheduledAt: callDate.toISOString(),
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            }),
       });
       if (!response.ok) throw new Error("Could not send your scheduling request. Please try again.");
-      const result = await response.json() as { agentNotificationSent?: boolean };
+      const result = await response.json() as { agentNotificationSent?: boolean; editToken?: string };
+      if (!isRescheduling) {
+        if (!result.editToken) throw new Error("Could not enable schedule editing. Please contact support.");
+        setScheduleEditToken(result.editToken);
+      }
       setAgentNotificationSent(result.agentNotificationSent === true);
+      setScheduleWasUpdated(isRescheduling);
       setScheduleSubmitted(true);
       setStep(5);
     } catch (error) {
@@ -492,7 +506,9 @@ export default function VideoCallWidget({
                 disabled={!selectedTime || submittingSchedule}
                 className="mt-auto min-h-11 w-full rounded-xl bg-[#103B35] py-2 text-sm font-bold text-white shadow-lg shadow-emerald-950/10 transition hover:bg-[#0B302B] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
               >
-                {submittingSchedule ? "Sending request..." : "Confirm time"}
+                {submittingSchedule
+                  ? scheduleEditToken ? "Updating schedule..." : "Sending request..."
+                  : scheduleEditToken ? "Update scheduled time" : "Confirm time"}
               </button>
             </div>
           )}
@@ -503,13 +519,35 @@ export default function VideoCallWidget({
                 <FaCheck />
               </div>
               <span className="mt-5 text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-800">You&apos;re on the calendar</span>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">Request received</h2>
+              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
+                {scheduleWasUpdated ? "Request updated" : "Request received"}
+              </h2>
               <p className="mt-3 text-sm leading-6 text-slate-600">
-                Your call is requested for <strong>{new Date(`${selectedDateValue}T00:00:00`).toLocaleDateString()} at {formatTime(Number(selectedTime.split(":")[0]), Number(selectedTime.split(":")[1]))}</strong>. We emailed the joining link to <strong>{formData.email}</strong>.
+                {scheduleWasUpdated ? "Your updated call time is" : "Your call is requested for"} <strong>{new Date(`${selectedDateValue}T00:00:00`).toLocaleDateString()} at {formatTime(Number(selectedTime.split(":")[0]), Number(selectedTime.split(":")[1]))}</strong>. We {scheduleWasUpdated ? "sent an updated email with the same joining link to" : "emailed the joining link to"} <strong>{formData.email}</strong>.
                 {agentNotificationSent
                   ? " Our sales team will contact you to confirm availability."
                   : " The sales team could not be notified right now. Please contact them to confirm availability."}
               </p>
+              {scheduleEditToken && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (
+                      !availableDates.some(date => localDateKey(date) === selectedDateValue) ||
+                      !availableTimes.some(time => time.value === selectedTime)
+                    ) {
+                      setSelectedDate("");
+                      setSelectedTime("");
+                      setTimePage(0);
+                    }
+                    setCallError("");
+                    setStep(4);
+                  }}
+                  className="mt-5 text-sm font-semibold text-emerald-800 transition hover:text-emerald-950"
+                >
+                  Edit date &amp; time
+                </button>
+              )}
               <button onClick={endCall} className="mt-7 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#103B35] text-sm font-bold text-white transition hover:bg-[#0B302B]">
                 Done <FaCheck className="text-xs" />
               </button>

@@ -43,6 +43,15 @@ export const videoCallRequestSchema = z.object({
   { path: ["timeZone"], message: "A time zone is required for scheduled calls." },
 );
 
+export const videoCallRescheduleSchema = z.object({
+  sessionToken: sessionTokenSchema,
+  scheduledAt: z.string().datetime(),
+  timeZone: timeZoneSchema,
+}).strict().refine(
+  (value) => Date.parse(value.scheduledAt) > Date.now(),
+  { path: ["scheduledAt"], message: "Scheduled time must be in the future." },
+);
+
 export const agentLoginSchema = z.object({
   username: z.string().trim().min(3).max(80).regex(/^[a-zA-Z0-9._-]+$/),
   password: z.string().min(12).max(128),

@@ -54,3 +54,35 @@ export async function findScheduledVideoCallByTokenHash(tokenHash: string) {
   if (call) await touchSession(call.session_id);
   return call;
 }
+
+export async function findScheduledVideoCallBySessionId(sessionId: number) {
+  const [rows] = await db.execute<ScheduledVideoCall[]>(
+    `SELECT session_id, name, email, phone,
+       DATE_FORMAT(scheduled_at, '%Y-%m-%dT%H:%i:%s.000Z') AS scheduled_at,
+       time_zone
+     FROM chatbot_video_call_requests
+     WHERE session_id = ? AND expires_at > UTC_TIMESTAMP()
+     LIMIT 1`,
+    [sessionId],
+  );
+  return rows[0] ?? null;
+}
+
+export async function updateScheduledVideoCall(input: {
+  sessionId: number;
+  scheduledAt: string;
+  timeZone: string;
+}) {
+  await db.execute(
+    `UPDATE chatbot_video_call_requests
+     SET scheduled_at = ?, time_zone = ?, expires_at = DATE_ADD(?, INTERVAL 1 DAY)
+     WHERE session_id = ? AND expires_at > UTC_TIMESTAMP()`,
+    [
+      new Date(input.scheduledAt),
+      input.timeZone,
+      new Date(input.scheduledAt),
+      input.sessionId,
+    ],
+  );
+  return findScheduledVideoCallBySessionId(input.sessionId);
+}
